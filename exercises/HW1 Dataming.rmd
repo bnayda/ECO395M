@@ -1,0 +1,382 @@
+---
+title: "HW1 Dataming"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Visualization 1: Green Buildings
+
+```{r include = False}
+library(tidyverse)
+library(dplyr)
+library(FNN)
+###### Data Visualization 1: Green buildings
+greenbuildings = read.csv("greenbuildings.csv")
+#summary(greenbuild)
+greenbuildings$classtype <- ifelse(greenbuildings$class_a == 1, "Class A", ifelse(greenbuildings$class_b == 1, "Class B", "Class C"))
+greenb = filter(greenbuildings, green_rating == 1 & leasing_rate > .1)
+nongreen = filter(greenbuildings, green_rating == 0 & leasing_rate > .1)
+
+greenb_net = filter(greenb, net == 1)
+greenb_nonnet = filter(greenb, net == 0)
+nongreen_net = filter(nongreen, net == 1)
+nongreen_nonnet = filter(nongreen, net == 0)
+
+##avgrent = c(mean(greenb_nonnet$Rent), mean(nongreen_nonnet$Rent), mean(greenb_net$Rent), mean(nongreen_net$Rent))
+medrent = c(median(greenb_nonnet$Rent), median(nongreen_nonnet$Rent), median(greenb_net$Rent), median(nongreen_net$Rent))
+greenlabels <- c("Green Building", "Non-Green Building","Green Building", "Non-Green Building" )
+netlables <- c("Non-Net Contract", "Non-Net Contract", "Net Contract","Net Contract" )
+
+df <- data.frame(
+  rent = medrent,
+  green = greenlabels,
+  net = netlables
+)
+```
+
+The "data-guru" did not consider other factors that could be causing the discrepancy in rents between green buildings and non-green buildings. First, the rents between net contract and non net contract rents should be analyzed because non-net contract rents include the price of utilities. For all of the below analysis buildings with lease rates 10 percent and below were excluded from the data.
+
+The plot below shows the median rents for green buildings and non-green buildings for each contract type. 
+
+## Plot
+
+You can also embed plots, for example:
+
+```{r}
+ggplot(df, aes(x=green, y=rent)) + 
+  geom_bar(stat='identity') + 
+  labs(
+    title = "Median Rent by Building Type and Contract Type",
+    x = "Building Type",
+    y = "Rent") +
+  facet_wrap(~ net)
+```
+
+As shown above, green buildings have higher rents compared to non-green buildings for both non-net contracts and net contracts.
+
+```{r include = False}
+classA_greenb <- filter(greenb_nonnet, classtype == "Class A")
+classA_nongreen <- filter(nongreen_nonnet, classtype == "Class A")
+classB_greenb <- filter(greenb_nonnet, classtype == "Class B")
+classB_nongreen <- filter(nongreen_nonnet, classtype == "Class B")
+classC_greenb <- filter(greenb_nonnet, classtype == "Class C")
+classC_nongreen <- filter(nongreen_nonnet, classtype == "Class C")
+
+medrentclass <- c(median(classA_greenb$Rent), median(classA_nongreen$Rent), median(classB_greenb$Rent), median(classB_nongreen$Rent), median(classC_greenb$Rent), median(classC_nongreen$Rent))
+greenlabels <- c("Green", "Non-Green","Green", "Non-Green","Green", "Non-Green")
+classlabels <- c("Class A", "Class A", "Class B", "Class B", "Class C", "Class C")
+
+df_class <- data.frame(
+  rent = medrentclass,
+  greentype = greenlabels,
+  typelabel = classlabels
+)
+```
+
+However, rents could be influenced by other factors such as building class type. The plots below show the median non-net contract rents by building class type for green buildings and non-green buildings.
+
+```{r}
+ggplot(df_class, aes(x=greentype, y=rent)) + 
+  geom_bar(stat='identity') + 
+  labs(
+    title = "Median Non-Net Contract Rent by Building Class Type",
+    x = "Building Type",
+    y = "Rent") +
+  facet_wrap(~ typelabel)
+```
+
+As shown above, for class A and B buildings there is little difference between the rents for green buildings and non-green buildings. However, class C buildings have much higher rents. As a result, the population mix of class types for green buildings and non-green buildings should be analyzed.
+
+```{r include = False}
+N_green = nrow(greenb_nonnet)
+N_nongreen = nrow(nongreen_nonnet)
+
+classpercent <- c(length(which(greenb_nonnet$classtype == "Class A"))/N_green, 
+                  length(which(greenb_nonnet$classtype == "Class B"))/N_green, 
+                  length(which(greenb_nonnet$classtype == "Class C"))/N_green,
+                  length(which(nongreen_nonnet$classtype == "Class A"))/N_nongreen,
+                  length(which(nongreen_nonnet$classtype == "Class B"))/N_nongreen,
+                  length(which(nongreen_nonnet$classtype == "Class C"))/N_nongreen)
+greenlabels <- c("Green Building", "Green Building", "Green Building", "Non-Green Building", "Non-Green Building", "Non-Green Building" )
+classlabels <- c("Class A", "Class B", "Class C", "Class A", "Class B", "Class C")
+
+
+df_class_perc <- data.frame(
+  classpercent = classpercent,
+  greentype = greenlabels,
+  typelabel = classlabels
+)
+```
+
+
+```{r}
+ggplot(df_class_perc, aes(x=typelabel, y=classpercent)) + 
+  geom_bar(stat='identity') + 
+  labs(
+    title = "Building Class Type for Green and Non-Green Buildings",
+    x = "Building Class Type",
+    y = "Percentage") +
+  facet_wrap(~ greentype)
+```
+The above shows that a majority of green buildings are considered class A buildings. However, only around 36% of non-green buildings are class A. Class A buildings on average have higher rents which skews the median rents of green buildings higher compared to non-green buildings. As a result, if a class A green building is built it is not economically viable to build compared to a non-green building. 
+
+## Data Visualization 2: ABIA
+
+I analyzed which day of the week is the best day to minimize delays. The first plot below show the median delay for each flight on each day of the week.
+
+```{r include = False}
+abia = read.csv("ABIA.csv")
+abia$numdelay = ifelse(abia$DepDelay > 0, 1, 0)
+
+monday = filter(abia, DayOfWeek == 1 & numdelay == 1)
+tuesday = filter(abia, DayOfWeek == 2 & numdelay == 1)
+wednesday = filter(abia, DayOfWeek == 3 & numdelay == 1)
+thursday = filter(abia, DayOfWeek == 4 & numdelay == 1)
+friday = filter(abia, DayOfWeek == 5 & numdelay == 1)
+saturday = filter(abia, DayOfWeek == 6 & numdelay == 1)
+sunday = filter(abia, DayOfWeek == 7 & numdelay == 1)
+
+depdelay_med = c(median(monday$DepDelay, na.rm = "true"), median(tuesday$DepDelay, na.rm = "true"),
+                 median(wednesday$DepDelay, na.rm = "true"), median(thursday$DepDelay, na.rm = "true"),
+                 median(friday$DepDelay, na.rm = "true"), median(saturday$DepDelay, na.rm = "true"),
+                 median(sunday$DepDelay, na.rm = "true"))
+dayname = c("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+daynum = c(1,2,3,4,5,6,7)
+
+df_day <- data.frame(
+  depdelay_med = depdelay_med,
+  day = day,
+  daynum = daynum
+)
+```
+
+```{r}
+ggplot(df_day, aes(x=reorder(dayname, daynum), y=depdelay_med)) + 
+  geom_bar(stat='identity') + 
+  labs(
+    title = "Median Delay in Minutes for each Day of the Week",
+    x = "Day of Week",
+    y = "Delay in Minutes")
+```
+
+Wednesday has the lowest median delay out of all days of the week. However, to minimize delays the percentage of flights delayed should also be considered.
+
+```{r include = False}
+n_mon = length(which(abia$DayOfWeek == 1))
+n_tues = length(which(abia$DayOfWeek == 2))
+n_wed = length(which(abia$DayOfWeek == 3))
+n_thurs = length(which(abia$DayOfWeek == 4))
+n_fri = length(which(abia$DayOfWeek == 5))
+n_sat = length(which(abia$DayOfWeek == 6))
+n_sun = length(which(abia$DayOfWeek == 7))
+
+mon_delay = nrow(monday)
+tues_delay = nrow(tuesday)
+wed_delay = nrow(wednesday)
+thurs_delay = nrow(thursday)
+fri_delay = nrow(friday)
+sat_delay = nrow(saturday)
+sun_delay = nrow(sunday)
+
+depdelay_perc = c(mon_delay/n_mon, tues_delay/n_tues,
+                 wed_delay/n_wed, thurs_delay/ n_thurs,
+                 fri_delay/n_fri, sat_delay/n_sat,
+                 sun_delay/n_sun)
+dayname = c("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+daynum = c(1,2,3,4,5,6,7)
+
+df_day_perc <- data.frame(
+  depdelay_perc = depdelay_perc,
+  day = day,
+  daynum = daynum
+)
+```
+
+```{r}
+ggplot(df_day_perc, aes(x=reorder(dayname, daynum), y=depdelay_perc)) + 
+  geom_bar(stat='identity') + 
+  labs(
+    title = "Percentage of Flights Delayed for each Day of the Week",
+    x = "Day of Week",
+    y = "Percentage")
+
+```
+
+Saturdays have the lowest percentage of flights delayed at 36%. Flights on Wednesdays are delayed slightly more at 38%. As a result, Wednesdays are generally the best day of the week to fly in order to minimize delays.
+
+## Regression vs. KNN
+
+For each trim type k values from 3 to 50 were tested in order to minimize out of sample RMSE. The data subsets for each trim type was split for training and testing at 70% and 30%, respectively.
+
+
+```{r include = False}
+sclass = read.csv("sclass.csv")
+sclass_350 = filter(sclass, trim == "350")
+sclass_65amg = filter(sclass, trim == "65 AMG")
+rmse_350 <- 1:48
+rmse_65amg <- 1:48
+
+rmse = function(y, ypred) {
+  sqrt(mean(data.matrix((y-ypred)^2)))
+}
+
+t <- 1
+kn <- 3
+
+N_350 = nrow(sclass_350)
+#### train on 70% of data set
+N_train_350 = 291
+N_test_350 = N_350 - N_train_350
+
+N_65amg = nrow(sclass_65amg)
+#### train on 70% of data set
+N_train_65amg = 204
+N_test_65amg = N_65amg - N_train_65amg
+
+#####
+# Train/test split
+#####
+
+# randomly sample a set of data points to include in the training set
+train_ind_350 = sample.int(N_350, N_train_350, replace=FALSE)
+train_ind_65amg = sample.int(N_65amg, N_train_65amg, replace=FALSE)
+
+# Define the training and testing set
+D_train_350 = sclass_350[train_ind_350,]
+D_test_350 = sclass_350[-train_ind_350,]
+
+D_train_65amg = sclass_65amg[train_ind_65amg,]
+D_test_65amg = sclass_65amg[-train_ind_65amg,]
+
+x_train_350 = select(D_train_350, mileage)
+y_train_350 = select(D_train_350, price)
+x_test_350 = select(D_test_350, mileage)
+y_test_350 = select(D_test_350, price)
+
+x_train_65amg = select(D_train_65amg, mileage)
+y_train_65amg = select(D_train_65amg, price)
+x_test_65amg = select(D_test_65amg, mileage)
+y_test_65amg = select(D_test_65amg, price)
+
+for(i in 1:48){
+  
+knn_350 = knn.reg(train = x_train_350, test = x_test_350, y = y_train_350, k=kn)
+names(knn_350)
+
+knn_65amg = knn.reg(train = x_train_65amg, test = x_test_65amg, y = y_train_65amg, k=kn)
+names(knn_65amg)
+
+#####
+# Compare the models by RMSE_out
+###### define a helper function for calculating RMSE
+ypred_knn_350 = knn_350$pred
+rmse_350[t] <- rmse(y_test_350, ypred_knn_350)
+
+ypred_knn_65amg = knn_65amg$pred
+rmse_65amg[t] <- rmse(y_test_65amg, ypred_knn_65amg)
+
+t <- t +1
+kn <- kn +1
+}
+k <- 3:50
+
+df_350 <- data.frame(
+  x_350 = k,
+  y_350 = rmse_350
+)
+
+df_65amg <- data.frame(
+  x_65amg = k,
+  y_65amg = rmse_65amg
+)
+```
+
+The plot below shows the out of sample RMSE's of K Nearest Neighbors from 3 to 50 for predicting the price of an S-class model with a 350 trim based on mileage.
+
+```{r}
+ggplot(data = df_350) + 
+  geom_path(aes(x = x_350, y = y_350), color='blue') +
+  labs(
+  title = "RMSE's of Different K Nearest Neighbors for Mileage on Price of S-class Mercedes with a 350 trim",
+  x = "K",
+  y = "RMSE"
+)
+```
+
+The out of sample RMSE's bottom when k is around 20.
+
+
+The plot below shows the out of sample RMSE's of K Nearest Neighbors from 3 to 50 for predicting the price of an S-class model with a 65 AMG trim based on mileage.
+```{r}
+ggplot(data = df_65amg) + 
+  geom_path(aes(x = x_65amg, y = y_65amg), color='blue') +
+  labs(
+    title = "RMSE's of Different K Nearest Neighbors for Mileage on Price of S-class Mercedes with a 65 AMG trim",
+    x = "K",
+    y = "RMSE"
+  )
+```
+
+The optimal K value is generally larger for the 65 AMG trim compared to the 350 trim. This is because there is greater variation in price in the 65 AMG trim compared to the 350 trim as shown below.
+
+```{r}
+ggplot(data = sclass_350) + 
+  geom_point(mapping = aes(x = mileage, y = price)) +
+labs(
+    title = "Price of S-class Mercedes with a 350 trim Compared to Mileage",
+    x = "Mileage",
+    y = "Price")
+```
+
+
+```{r}
+ggplot(data = sclass_65amg) + 
+  geom_point(mapping = aes(x = mileage, y = price)) +
+labs(
+    title = "Price of S-class Mercedes with a 65 AMG trim Compared to Mileage",
+    x = "Mileage",
+    y = "Price")
+```
+
+The optimal K value for 350 trim is 10
+
+The fitted plot for the 350 trim with K=10 is below.
+
+```{r include = False}
+knn_350 = knn.reg(train = x_train_350, test = x_test_350, y = y_train_350, k=10)
+ypred_350 = knn_350$pred
+D_test_350$ypred_350 = ypred_350
+
+p_test = ggplot(data = D_test_350) + 
+  geom_point(mapping = aes(x = mileage, y = price), color='lightgrey') + 
+  theme_bw(base_size=18)
+```
+
+
+```{r}
+p_test + geom_point(aes(x = mileage, y = ypred_350), color='red')
+```
+
+
+The optimal K value for 65 AMG trim is 35
+
+The fitted plot for the 65 AMG trim with K=35 is below.
+```{r include = False}
+knn_65amg = knn.reg(train = x_train_65amg, test = x_test_65amg, y = y_train_65amg, k=35)
+ypred_65amg = knn_65amg$pred
+D_test_65amg$ypred_65amg = ypred_65amg
+
+p_test = ggplot(data = D_test_65amg) + 
+  geom_point(mapping = aes(x = mileage, y = price), color='lightgrey') + 
+  theme_bw(base_size=18)
+
+```
+
+```{r}
+p_test + geom_point(aes(x = mileage, y = ypred_65amg), color='red')
+```
