@@ -1,0 +1,139 @@
+---
+title: "HW3"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Green Buildings
+
+Two approaches were tested in order to develop the best model to predict the rent of a building. The first approach uses Lasso in order to select the best model. The second approach uses stepwise approach to identify the best predictive model. 
+The data was modified before conducting both modeling approaches. First all buildings with leasing rates below 10 were excluded from the data set because these outliers could affect model estimation. In addition, the effect of either LEED or Energystar green energy certification was not isolated and thus dropped from the data set. Only the effect of a green rating certification was examined during the analysis.
+
+The Lasso model approach identified the model with the lowest AIC. The resulting model coefficients are shown below.
+
+```{r include = FALSE}
+library(tidyverse)
+library(dplyr)
+library(FNN)
+library(gamlr)
+
+setwd("/Users/billynayda/Documents/Billy");
+greenbuildings = read.csv("greenbuildings.csv")
+greenbuildfilter = filter(greenbuildings, leasing_rate > .1)
+data = subset(greenbuildfilter, select = -c(CS_PropertyID,cluster,Precipitation, LEED, Energystar))
+greenbuild = data[complete.cases(data), ]
+scx = sparse.model.matrix(Rent ~ ., data=greenbuild)[,-1]
+scy = greenbuild$Rent
+sclasso = gamlr(scx, scy, family="gaussian")
+```
+
+```{r}
+coef(sclasso)
+```
+
+The stepwise approach was conducted using a forward stepwise in order to identify the best model by AIC.
+```{r include = FALSE}
+lmbase = lm(Rent ~ 1, data=greenbuild)
+lm_forward = step(lmbase, direction='forward',
+                  scope=~(size + empl_gr + leasing_rate + stories + 
+                            age + renovated + class_a + class_b + green_rating + net +
+                            amenities + cd_total_07 + hd_total07 + total_dd_07 + Gas_Costs +
+                            Electricity_Costs + cluster_rent)^2)
+
+```
+The forward stepwise identified the following model. 
+```{r}
+summary(lm_forward)
+```
+
+To determine which approach was the most robust the out of sample RMSE were calculated.
+
+```{r include = FALSE}
+rmse = function(y, yhat) {
+  sqrt( mean( (y - yhat)^2 ) )
+}
+
+rmse1 = 0
+
+for(i in 1:250){
+  n = nrow(greenbuild)
+  n_train = round(0.8*n)  # round to nearest integer
+  n_test = n - n_train
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  green_train = greenbuild[train_cases,]
+  green_test = greenbuild[test_cases,]
+  scx = sparse.model.matrix(Rent ~ ., data=green_train)[,-1]
+  scy = green_train$Rent
+  sclasso = gamlr(scx, scy, family="gaussian")
+  scxtest = sparse.model.matrix(Rent ~ ., data=green_test)[,-1]
+  yhat_test1 = predict(sclasso, scxtest)
+  rmse1 = rmse1 + rmse(green_test$Rent, yhat_test1)
+}
+avgrmse1 = rmse1 /250
+
+rmse2 = 0
+for(i in 1:250){
+  n = nrow(greenbuild)
+  n_train = round(0.8*n)  # round to nearest integer
+  n_test = n - n_train
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  green_train = greenbuild[train_cases,]
+  green_test = greenbuild[test_cases,]
+  
+  finallm = lm(Rent ~ cluster_rent + size + class_a + class_b + 
+    cd_total_07 + age + net + empl_gr + Electricity_Costs + leasing_rate + 
+    green_rating + amenities + cluster_rent:size + cd_total_07:net + 
+    class_b:age + class_a:age + cluster_rent:Electricity_Costs + 
+    size:Electricity_Costs + size:cd_total_07 + class_a:empl_gr + 
+    cluster_rent:age + age:Electricity_Costs + size:leasing_rate + 
+    size:class_a + cluster_rent:leasing_rate + cluster_rent:net + 
+    green_rating:amenities + cd_total_07:age + cluster_rent:class_a + 
+    cluster_rent:class_b + Electricity_Costs:amenities + cluster_rent:amenities + 
+    size:class_b + size:age + size:amenities + class_b:amenities + 
+    cluster_rent:cd_total_07 + empl_gr:Electricity_Costs + size:empl_gr + 
+    age:green_rating, data = greenbuild)
+  
+  yhat_test1 = predict(finallm, green_test)
+  rmse2 = rmse2 + rmse(green_test$Rent, yhat_test1)
+}
+avgrmse2 = rmse2 /250
+```
+
+The out-of-sample RMSE for the Lasso approach is:
+
+```{r}
+avgrmse1
+```
+
+The out-of-sample RMSE for the stepwise approach is:
+```{r}
+avgrmse2
+```
+
+As a result, the best model is the model identified using the stepwise approach which has the lower out of sample RMSE. Using the stepwise model we can determine the effect of a green building certification on rents. The average building has amenities and is 46.95 years old. Thus an average building holding all other variables constant, has rents that are $0.91/sqft higher. This model also shows us that the green rating certification effect is different for buildings that have amenities and those of different ages. A building with a green rating certification and has amenities has rents that are $2.16/sqft less than buildings without a green rating certification. In addition, a building that has a green rating certification increases rents the older the building is.
+
+
+## What Causes What?
+
+1. Why can’t I just get data from a few different cities and run the regression of “Crime” on “Police” to understand how more cops in the streets affect crime? (“Crime” refers to some measure of crime rate and “Police” measures the number of cops in a city.)
+
+A number of factors could influence crime and often more crime results in policies that increase the number of police presence to combat crime. As a result, there is an endogeniety problem that prevents us from being able to statistically determine if more police impacts crime rates.
+
+
+2. How were the researchers from UPenn able to isolate this effect? Briefly describe their approach and discuss their result in the “Table 2” below, from the researcher's paper.
+
+In order to isolate this effect they analyzed days in DC where there were high alerts that resulted in increased police presence due to terrorism concerns. As a result, the increased police was independent of rates of crime and thus could be used to determine if the increased police presence resulted in decreased crime rates on days there were high alerts. The researchers found that the increased police presence on high alert days resulted in decreased crime rates. They also found that changes in the number of tourists and citizens traveling throughout the city did not impact crime rates. Therefore, this shows that the increased police presence was responsible for decreased crime rates.
+
+3. Why did they have to control for Metro ridership? What was that trying to capture?
+
+They controlled for Metro ridership to test the hypothesis that on days when there was a high alert that it did not impact the number of people going out and traveling throughout the city. If on days with a high alert there was reduced ridership then a decrease in crime rates could be due to fewer numbers of victims.
+
+4. Below I am showing you "Table 4" from the researchers' paper. Just focus on the first column of the table. Can you describe the model being estimated here? What is the conclusion?
+
+The model estimated includes an interaction between high alert days and if the crime occured in the first district, an interaction between high alert days and crime occuring in all other police districts, and metro ridership. The first police district covers most of the area of the national mall including high sensitive targets such as the washington monument, the capitol building, and other museums and art galleries. As a result, the increased police presence would be concentrated in first police district which would allows us to determine if increased police presence directly reduces crime. The model results show that the coefficient for the interaction between high alert days and crimes in the first district is negative and statistically significant. Therefore, it shows that increased police presence does reduce the number of crimes.
+
