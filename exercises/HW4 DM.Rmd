@@ -1,0 +1,127 @@
+---
+title: "HW4"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Clustering and PCA
+
+
+```{r include = FALSE}
+library(tidyverse)
+library(ggplot2)
+
+setwd("/Users/billynayda/Documents/Billy");
+data = read.csv("wine.csv", header=TRUE)
+winedata = data[,1:12]
+
+pc2 = prcomp(winedata, scale=TRUE, rank=2)
+loadings = pc2$rotation
+scores = pc2$x
+```
+
+We can use PCA to determine the color of wine based on the chemical properties. Below is a plot of two components between red wine and white wine.
+
+```{r}
+qplot(scores[,1], scores[,2], color=data$color, xlab='Component 1', ylab='Component 2')
+```
+
+White wines have more positive component 1 values and red wines have more negative component 1 values. 
+
+Another method to determine the color of the wine based on the chemical properties is using clustering analysis.  
+
+```{r include = FALSE}
+datascaled <- scale(winedata, center=TRUE, scale=TRUE) 
+
+mu = attr(datascaled,"scaled:center")
+sigma = attr(datascaled,"scaled:scale")
+
+clust1 = kmeans(datascaled, 2, nstart=25)
+```
+The plot below shows the clustering between red and white wines.
+```{r}
+qplot(total.sulfur.dioxide, residual.sugar, data=data, color=factor(clust1$cluster))
+```
+
+
+```{r}
+qplot(free.sulfur.dioxide, residual.sugar, data=data, color=factor(clust1$cluster))
+```
+
+```{r}
+qplot(free.sulfur.dioxide, total.sulfur.dioxide, data=data, color=factor(clust1$cluster))
+```
+
+The above plots show that it is difficult to develop strongly distinct clusters using clustering analysis. As a result, PCA is the better dimensionality reduction technique. Next I attempted to use PCA to segment the quality of the wine. The plots below there is some distinct segmentation between low and high quality wines for some components and less so between others.
+
+```{r include = FALSE}
+pc5 = prcomp(winedata, scale.=TRUE)
+loadings = pc5$rotation
+scores = pc5$x
+```
+
+
+```{r}
+qplot(scores[,1], scores[,2], color=data$quality, xlab='Component 1', ylab='Component 2')
+```
+
+```{r}
+qplot(scores[,1], scores[,3], color=data$quality, xlab='Component 1', ylab='Component 3')
+```
+
+```{r}
+qplot(scores[,2], scores[,4], color=data$quality, xlab='Component 2', ylab='Component 4')
+```
+
+```{r}
+qplot(scores[,1], scores[,5], color=data$quality, xlab='Component 1', ylab='Component 5')
+```
+
+## Market Segmentation
+
+I conducted analysis of Twitter post user data using clustering techniques. The data was first normalized by computing category post frequencies. Then using k-means clustering I identified different market segments. The plots below clusters of different segments that should be targeted.
+
+```{r include = FALSE}
+socialdata = read.csv("social_marketing.csv", header=TRUE)
+ad_data = socialdata[,2:37]
+Z = ad_data/rowSums(ad_data)
+scaledZ <- scale(Z, center=TRUE, scale=TRUE) 
+
+mu = attr(scaledZ,"scaled:center")
+sigma = attr(scaledZ,"scaled:scale")
+
+addclust = kmeans(scaledZ, 3, nstart=25)
+```
+
+Users that have high frequencies of posts about photo_sharing and cooking is a segment of twitter users that NutrientH20 should target.
+```{r}
+qplot(cooking, photo_sharing, data=ad_data, color=factor(addclust$cluster))
+```
+
+Another segment that should be targeted are users that post about health nutrition and cooking.
+```{r}
+qplot(cooking, health_nutrition, data=ad_data, color=factor(addclust$cluster))
+```
+
+## Association Rules for Grocery Purchases
+
+Analyzing baskets of grocery store purchases there can be information gained from common baskets of items purchased. In order to identify common items purchased association rules can be applied.
+
+```{r include = FALSE}
+library(arules)
+gdata = read.csv("groceries.txt", header=FALSE)
+gdata$cust <- seq.int(nrow(gdata))
+gdata$cust = factor(gdata$cust)
+groceries = as(gdata, "transactions")
+rules = apriori(groceries, 
+                     parameter=list(support=.01, confidence=.1, maxlen=5))
+
+```
+After inspection of the associations it appears only those rules with lift greater than 6 produce reasonable values. These associations are listed below.
+```{r}
+inspect(subset(rules, lift > 6))
+```
+
